@@ -1,6 +1,5 @@
 import type { Viewport } from 'next'
-import { NextStudio } from 'next-sanity/studio'
-import config from '../../../sanity.config'
+import StudioClient from '@/components/StudioClient'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -8,5 +7,5 @@ export const viewport: Viewport = {
 }
 
 export default function StudioPage() {
-  return <NextStudio config={config} />
+  return <StudioClient />
 }
