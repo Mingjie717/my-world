@@ -1,102 +1,106 @@
 'use client'
 
-import { useState } from 'react'
-import World from '@/components/World'
-import HouseInterior from '@/components/HouseInterior'
+import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 
-type Scene = 'exterior' | 'interior' | 'underwater' | 'forest'
+type Scene = 'exterior' | 'interior' | 'basement' | 'underwater' | 'forest'
+
+// Load 3D scenes client-only (no SSR — WebGL requires browser)
+const World = dynamic(() => import('@/components/World'), { ssr: false })
+const HouseInterior = dynamic(() => import('@/components/HouseInterior'), { ssr: false })
+const BasementScene = dynamic(() => import('@/components/BasementScene'), { ssr: false })
+
+function FadeOverlay({ visible }: { visible: boolean }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 100,
+      background: '#0A0A08',
+      opacity: visible ? 1 : 0,
+      pointerEvents: visible ? 'all' : 'none',
+      transition: 'opacity 0.55s ease',
+    }} />
+  )
+}
+
+function SimpleScene({ label, buttonLabel, onBack, bg }: {
+  label: string; buttonLabel: string; onBack: () => void; bg: string
+}) {
+  return (
+    <div style={{
+      width: '100vw', height: '100vh', background: bg,
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'Georgia, serif',
+    }}>
+      <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '20px', letterSpacing: '6px' }}>
+        {label}
+      </p>
+      <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: '12px', marginTop: 12, letterSpacing: '2px' }}>
+        coming soon
+      </p>
+      <button onClick={onBack} style={{
+        marginTop: 48, background: 'none',
+        border: '1px solid rgba(255,255,255,0.25)',
+        color: 'rgba(255,255,255,0.6)',
+        padding: '8px 28px', cursor: 'pointer',
+        fontSize: '11px', letterSpacing: '4px',
+        fontFamily: 'Georgia, serif',
+      }}>
+        {buttonLabel}
+      </button>
+    </div>
+  )
+}
 
 export default function Home() {
   const [scene, setScene] = useState<Scene>('exterior')
+  const [fading, setFading] = useState(false)
+
+  const go = (next: Scene) => {
+    setFading(true)
+    setTimeout(() => { setScene(next); setFading(false) }, 560)
+  }
 
   return (
     <main style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <FadeOverlay visible={fading} />
+
       {scene === 'exterior' && (
         <World
-          onEnterHouse={() => setScene('interior')}
-          onDive={() => setScene('underwater')}
-          onRowToForest={() => setScene('forest')}
+          onEnterHouse={() => go('interior')}
+          onDive={() => go('underwater')}
+          onRowToForest={() => go('forest')}
+          onBasement={() => go('basement')}
         />
       )}
 
       {scene === 'interior' && (
-        <HouseInterior onExit={() => setScene('exterior')} />
+        <HouseInterior
+          onExit={() => go('exterior')}
+          onBasement={() => go('basement')}
+        />
+      )}
+
+      {scene === 'basement' && (
+        <BasementScene onExit={() => go('interior')} />
       )}
 
       {scene === 'underwater' && (
-        <div
-          style={{
-            width: '100vw',
-            height: '100vh',
-            background: '#2A5878',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#A8D8F0',
-            fontFamily: 'Georgia, serif',
-          }}
-        >
-          <p style={{ fontSize: '22px', letterSpacing: '4px', opacity: 0.7 }}>
-            ~ underwater ~
-          </p>
-          <p style={{ marginTop: '16px', opacity: 0.4, fontSize: '13px' }}>
-            coming soon
-          </p>
-          <button
-            onClick={() => setScene('exterior')}
-            style={{
-              marginTop: '40px',
-              background: 'none',
-              border: '1px solid #A8D8F0',
-              color: '#A8D8F0',
-              padding: '10px 28px',
-              cursor: 'pointer',
-              letterSpacing: '3px',
-              fontSize: '12px',
-            }}
-          >
-            SURFACE
-          </button>
-        </div>
+        <SimpleScene
+          label="~ underwater ~"
+          buttonLabel="surface"
+          onBack={() => go('exterior')}
+          bg='#122038'
+        />
       )}
 
       {scene === 'forest' && (
-        <div
-          style={{
-            width: '100vw',
-            height: '100vh',
-            background: '#4A7050',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#C8E0B8',
-            fontFamily: 'Georgia, serif',
-          }}
-        >
-          <p style={{ fontSize: '22px', letterSpacing: '4px', opacity: 0.7 }}>
-            ~ forest island ~
-          </p>
-          <p style={{ marginTop: '16px', opacity: 0.4, fontSize: '13px' }}>
-            coming soon
-          </p>
-          <button
-            onClick={() => setScene('exterior')}
-            style={{
-              marginTop: '40px',
-              background: 'none',
-              border: '1px solid #C8E0B8',
-              color: '#C8E0B8',
-              padding: '10px 28px',
-              cursor: 'pointer',
-              letterSpacing: '3px',
-              fontSize: '12px',
-            }}
-          >
-            ROW BACK
-          </button>
-        </div>
+        <SimpleScene
+          label="~ forest island ~"
+          buttonLabel="row back"
+          onBack={() => go('exterior')}
+          bg='#0E1E10'
+        />
       )}
     </main>
   )

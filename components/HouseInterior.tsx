@@ -1,48 +1,44 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
 import { client, urlFor } from '@/lib/sanity'
 import { allEntriesQuery } from '@/lib/queries'
 
+// ─── PALETTE (user watercolor 1 — teal/mustard living room) ──────────────────
 const IC = {
-  floor: '#C4A882',
-  floorPlank: '#A88A68',
-  wall: '#E8D4B8',
-  wallSide: '#D8C4A4',
+  floor: '#8B6040',
+  floorDark: '#6A4828',
+  wallTeal: '#2A8888',
+  wallTealDark: '#1E6868',
   ceiling: '#D0BC9C',
-  sofa: '#788098',
-  sofaLight: '#9AAAB8',
-  sofaDark: '#5A6878',
-  sofaArm: '#526070',
-  window: '#F8F4E0',
-  windowGlow: '#FFF8E8',
+  sofaMustard: '#C89030',
+  sofaDark: '#A87020',
+  sofaArm: '#906018',
+  shelfWood: '#8B6040',
+  shelfDark: '#6A4028',
+  windowGlow: '#F8F2E0',
   windowFrame: '#8B6040',
-  windowView: '#A8C8E0',
-  windowViewGround: '#8AAF7E',
-  shelf: '#8B6040',
-  shelfDark: '#6A4828',
-  rug: '#A87860',
-  rugDark: '#885040',
-  tv: '#2A3038',
-  tvScreen: '#3A5868',
-  tvOn: '#5A8898',
-  cabinet: '#8B6040',
-  cabinetDark: '#6A4828',
-  plant: '#6A9060',
-  plantDark: '#486840',
+  tvDark: '#202830',
+  tvScreen: '#304050',
+  tvOn: '#4A7888',
+  plantGreen: '#4A7840',
+  plantDark: '#2E5028',
   plantPot: '#C08050',
-  frame: '#7A5030',
-  canvas: '#E0C890',
-  table: '#8B6040',
-  tableDark: '#6A4828',
-  door: '#C4A07A',
+  doorWarm: '#C4A07A',
   doorFrame: '#8B6040',
-  mug: '#C08050',
+  rugRed: '#A87060',
   bookColors: [
     '#C47850', '#7A8FA0', '#8AAF7E', '#D4A860',
     '#A07888', '#6A8888', '#C49060', '#7090A0',
     '#A88060', '#9080A8', '#70A878', '#C8906A',
   ],
+  // Basement (Doig 100 Years Ago)
+  basementWall: '#2A2820',
+  basementWater: '#98B0C0',
+  canoeOrange: '#D04010',
+  distantGreen: '#1A3C18',
 }
 
 interface Entry {
@@ -55,15 +51,345 @@ interface Entry {
   tags?: string[]
 }
 
-export default function HouseInterior({ onExit }: { onExit: () => void }) {
+function useMouseNorm() {
+  const mouse = useRef({ x: 0, y: 0 })
+  useEffect(() => {
+    const fn = (e: MouseEvent) => {
+      mouse.current.x = (e.clientX / window.innerWidth - 0.5) * 2
+      mouse.current.y = -(e.clientY / window.innerHeight - 0.5) * 2
+    }
+    window.addEventListener('mousemove', fn)
+    return () => window.removeEventListener('mousemove', fn)
+  }, [])
+  return mouse
+}
+
+function useCursorPointer() {
+  return {
+    onPointerOver: () => { document.body.style.cursor = 'pointer' },
+    onPointerOut: () => { document.body.style.cursor = 'auto' },
+  }
+}
+
+// ─── CAMERA — mouse look-around ───────────────────────────────────────────────
+
+function LookCamera({ mouse }: { mouse: React.MutableRefObject<{ x: number; y: number }> }) {
+  const { camera } = useThree()
+  const euler = useRef(new THREE.Euler(0, 0, 0, 'YXZ'))
+
+  useFrame(() => {
+    euler.current.y += (-mouse.current.x * 0.55 - euler.current.y) * 0.04
+    euler.current.x += (mouse.current.y * 0.22 - euler.current.x) * 0.04
+    euler.current.x = Math.max(-0.28, Math.min(0.28, euler.current.x))
+    camera.rotation.copy(euler.current)
+  })
+  return null
+}
+
+// ─── ROOM SHELL ───────────────────────────────────────────────────────────────
+
+function Room() {
+  const W = 18, H = 8, D = 16
+  return (
+    <group>
+      {/* Floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+        <planeGeometry args={[W, D]} />
+        <meshLambertMaterial color={IC.floor} />
+      </mesh>
+      {/* Floor boards suggestion */}
+      {[-6, -3, 0, 3, 6].map(x => (
+        <mesh key={x} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.01, 0]}>
+          <planeGeometry args={[0.05, D]} />
+          <meshBasicMaterial color={IC.floorDark} transparent opacity={0.25} />
+        </mesh>
+      ))}
+      {/* Ceiling */}
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, H, 0]}>
+        <planeGeometry args={[W, D]} />
+        <meshLambertMaterial color={IC.ceiling} />
+      </mesh>
+      {/* Back wall (teal) */}
+      <mesh position={[0, H / 2, -D / 2]}>
+        <planeGeometry args={[W, H]} />
+        <meshLambertMaterial color={IC.wallTeal} />
+      </mesh>
+      {/* Left wall */}
+      <mesh rotation={[0, Math.PI / 2, 0]} position={[-W / 2, H / 2, 0]}>
+        <planeGeometry args={[D, H]} />
+        <meshLambertMaterial color={IC.wallTealDark} />
+      </mesh>
+      {/* Right wall */}
+      <mesh rotation={[0, -Math.PI / 2, 0]} position={[W / 2, H / 2, 0]}>
+        <planeGeometry args={[D, H]} />
+        <meshLambertMaterial color={IC.wallTealDark} />
+      </mesh>
+
+      {/* Rug (terracotta) — circle scaled into oval */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 1]} scale={[1, 0.58, 1]}>
+        <circleGeometry args={[5.5, 48]} />
+        <meshBasicMaterial color={IC.rugRed} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 1]} scale={[1, 0.58, 1]}>
+        <ringGeometry args={[4.2, 4.8, 48]} />
+        <meshBasicMaterial color={IC.sofaDark} transparent opacity={0.3} />
+      </mesh>
+    </group>
+  )
+}
+
+// ─── WINDOW (warm Avery light) ────────────────────────────────────────────────
+
+function Window() {
+  return (
+    <group position={[1, 5, -7.9]}>
+      {/* Frame */}
+      <mesh>
+        <boxGeometry args={[4, 3.5, 0.25]} />
+        <meshLambertMaterial color={IC.windowFrame} />
+      </mesh>
+      {/* Glass — warm light */}
+      <mesh position={[0, 0, 0.14]}>
+        <planeGeometry args={[3.5, 3]} />
+        <meshBasicMaterial color={IC.windowGlow} />
+      </mesh>
+      {/* Cross bars */}
+      <mesh position={[0, 0, 0.16]}>
+        <boxGeometry args={[0.08, 3, 0.04]} />
+        <meshBasicMaterial color={IC.windowFrame} />
+      </mesh>
+      <mesh position={[0, 0, 0.16]}>
+        <boxGeometry args={[3.5, 0.08, 0.04]} />
+        <meshBasicMaterial color={IC.windowFrame} />
+      </mesh>
+      {/* Window sill */}
+      <mesh position={[0, -1.9, 0.2]}>
+        <boxGeometry args={[4.2, 0.2, 0.5]} />
+        <meshLambertMaterial color={IC.windowFrame} />
+      </mesh>
+      {/* Warm light from window */}
+      <pointLight position={[0, 0, 2]} color='#FFF2D8' intensity={2.5} distance={12} />
+    </group>
+  )
+}
+
+// ─── BOOKSHELF (left wall) ────────────────────────────────────────────────────
+
+function Bookshelf({ books }: { books: Entry[] }) {
+  const pointer = useCursorPointer()
+  return (
+    <group position={[-8.2, 0, -3]}>
+      {/* Back panel */}
+      <mesh position={[0.1, 3.8, 0]}>
+        <boxGeometry args={[0.15, 7.2, 5.5]} />
+        <meshLambertMaterial color={IC.shelfDark} />
+      </mesh>
+      {/* Side panels */}
+      <mesh position={[0, 3.8, 2.85]}><boxGeometry args={[0.5, 7.2, 0.12]} /><meshLambertMaterial color={IC.shelfWood} /></mesh>
+      <mesh position={[0, 3.8, -2.85]}><boxGeometry args={[0.5, 7.2, 0.12]} /><meshLambertMaterial color={IC.shelfWood} /></mesh>
+      {/* Shelf boards */}
+      {[1.0, 2.8, 4.5, 6.0].map(y => (
+        <mesh key={y} position={[0, y, 0]}>
+          <boxGeometry args={[0.5, 0.12, 5.5]} />
+          <meshLambertMaterial color={IC.shelfWood} />
+        </mesh>
+      ))}
+      {/* Books */}
+      {books.slice(0, 12).map((book, i) => {
+        const row = Math.floor(i / 4)
+        const col = i % 4
+        const bz = -2 + col * 1.25
+        const by = [1.5, 3.2, 4.95][row] ?? 1.5
+        const bColor = IC.bookColors[i % IC.bookColors.length]
+        return (
+          <mesh
+            key={book._id} position={[0.05, by + 0.55, bz]}
+            {...pointer}
+          >
+            <boxGeometry args={[0.38, 1.1, 1.0]} />
+            <meshLambertMaterial color={bColor} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
+// ─── SOFA (Avery flat geometry, mustard) ──────────────────────────────────────
+
+function Sofa() {
+  return (
+    <group position={[0, 0, -5]}>
+      {/* Back */}
+      <mesh position={[0, 2.1, -0.5]}>
+        <boxGeometry args={[7, 2.2, 0.9]} />
+        <meshLambertMaterial color={IC.sofaMustard} />
+      </mesh>
+      {/* Seat */}
+      <mesh position={[0, 1.1, 0.4]}>
+        <boxGeometry args={[6.8, 0.7, 2.4]} />
+        <meshLambertMaterial color={IC.sofaDark} />
+      </mesh>
+      {/* Base */}
+      <mesh position={[0, 0.35, 0.2]}>
+        <boxGeometry args={[7, 0.55, 2.6]} />
+        <meshLambertMaterial color={IC.sofaArm} />
+      </mesh>
+      {/* Left arm */}
+      <mesh position={[-3.6, 1.6, 0.2]}>
+        <boxGeometry args={[0.7, 1.8, 2.6]} />
+        <meshLambertMaterial color={IC.sofaArm} />
+      </mesh>
+      {/* Right arm */}
+      <mesh position={[3.6, 1.6, 0.2]}>
+        <boxGeometry args={[0.7, 1.8, 2.6]} />
+        <meshLambertMaterial color={IC.sofaArm} />
+      </mesh>
+      {/* Cushion divider */}
+      <mesh position={[0, 1.5, 0.2]}>
+        <boxGeometry args={[0.1, 1.8, 2.4]} />
+        <meshLambertMaterial color={IC.sofaMustard} />
+      </mesh>
+      {/* Legs */}
+      {[[-3, 0], [3, 0], [-3, 0.8], [3, 0.8]].map(([x, zOff], i) => (
+        <mesh key={i} position={[x, 0.1, -0.7 + zOff * 2]}>
+          <cylinderGeometry args={[0.08, 0.08, 0.25, 5]} />
+          <meshLambertMaterial color={IC.shelfDark} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+// ─── TV ───────────────────────────────────────────────────────────────────────
+
+function TV({ movies }: { movies: Entry[]; onSelect: (e: Entry) => void }) {
+  return (
+    <group position={[7, 2.5, -5]}>
+      {/* Cabinet */}
+      <mesh position={[0, -1.8, 0]}>
+        <boxGeometry args={[4, 0.5, 1.5]} />
+        <meshLambertMaterial color={IC.shelfWood} />
+      </mesh>
+      {/* TV body */}
+      <mesh>
+        <boxGeometry args={[4.2, 2.5, 0.3]} />
+        <meshLambertMaterial color={IC.tvDark} />
+      </mesh>
+      {/* Screen */}
+      <mesh position={[0, 0, 0.16]}>
+        <planeGeometry args={[3.8, 2.2]} />
+        <meshBasicMaterial color={movies.length > 0 ? IC.tvOn : IC.tvScreen} />
+      </mesh>
+      {/* Screen glow light */}
+      {movies.length > 0 && (
+        <pointLight position={[0, 0, 1.5]} color='#5A8898' intensity={0.8} distance={5} />
+      )}
+    </group>
+  )
+}
+
+// ─── ARTWORK FRAMES ───────────────────────────────────────────────────────────
+
+function ArtworkFrame({ x, y, z, art }: { x: number; y: number; z: number; art?: Entry }) {
+  const pointer = useCursorPointer()
+  return (
+    <group position={[x, y, z]}>
+      <mesh>
+        <boxGeometry args={[2.8, 3.2, 0.15]} />
+        <meshLambertMaterial color={IC.shelfDark} />
+      </mesh>
+      <mesh position={[0, 0, 0.09]}>
+        <planeGeometry args={[2.4, 2.8]} />
+        <meshBasicMaterial color={art ? '#D4C090' : '#C8B878'} />
+      </mesh>
+      {art && (
+        <mesh position={[0, 0, 0.12]} {...pointer}>
+          <planeGeometry args={[2.4, 2.8]} />
+          <meshBasicMaterial color='#C8B070' transparent opacity={0.01} />
+        </mesh>
+      )}
+    </group>
+  )
+}
+
+// ─── PLANT ────────────────────────────────────────────────────────────────────
+
+function Plant() {
+  return (
+    <group position={[-7, 0, 5]}>
+      <mesh position={[0, 0.55, 0]}>
+        <cylinderGeometry args={[0.45, 0.35, 1.1, 7]} />
+        <meshLambertMaterial color={IC.plantPot} />
+      </mesh>
+      <mesh position={[0, 1.8, 0]}>
+        <sphereGeometry args={[1.1, 10, 8]} />
+        <meshLambertMaterial color={IC.plantGreen} />
+      </mesh>
+      <mesh position={[-0.5, 2.4, 0.2]} rotation={[0.3, -0.5, 0.4]}>
+        <sphereGeometry args={[0.7, 8, 6]} />
+        <meshLambertMaterial color={IC.plantDark} />
+      </mesh>
+      <mesh position={[0.5, 2.3, -0.2]} rotation={[-0.2, 0.4, -0.3]}>
+        <sphereGeometry args={[0.65, 8, 6]} />
+        <meshLambertMaterial color={IC.plantGreen} />
+      </mesh>
+    </group>
+  )
+}
+
+// ─── BASEMENT STAIRS (bottom left) ───────────────────────────────────────────
+
+function BasementStairs({ onClick }: { onClick: () => void }) {
+  const pointer = useCursorPointer()
+  return (
+    <group position={[-7, 0, 6]} onClick={onClick} {...pointer}>
+      {[0, 1, 2, 3].map(i => (
+        <mesh key={i} position={[0, -i * 0.45, -i * 0.7]}>
+          <boxGeometry args={[2.2, 0.45, 0.9]} />
+          <meshLambertMaterial color={i % 2 === 0 ? IC.shelfWood : IC.shelfDark} />
+        </mesh>
+      ))}
+      {/* Label on wall above stairs */}
+      <mesh position={[0, 1.5, -0.2]}>
+        <planeGeometry args={[1.8, 0.6]} />
+        <meshBasicMaterial color={IC.wallTealDark} transparent opacity={0.5} />
+      </mesh>
+    </group>
+  )
+}
+
+// ─── EXIT DOOR (right wall) ───────────────────────────────────────────────────
+
+function ExitDoor({ onClick }: { onClick: () => void }) {
+  const pointer = useCursorPointer()
+  return (
+    <group position={[8.8, 2, 2]} rotation={[0, -Math.PI / 2, 0]} onClick={onClick} {...pointer}>
+      <mesh>
+        <boxGeometry args={[3, 4.5, 0.2]} />
+        <meshLambertMaterial color={IC.doorFrame} />
+      </mesh>
+      <mesh position={[0, 0, 0.12]}>
+        <boxGeometry args={[2.6, 4.1, 0.1]} />
+        <meshLambertMaterial color={IC.doorWarm} />
+      </mesh>
+      <mesh position={[-0.7, 0, 0.2]}>
+        <sphereGeometry args={[0.12, 8, 8]} />
+        <meshLambertMaterial color={IC.shelfWood} />
+      </mesh>
+    </group>
+  )
+}
+
+// ─── INTERIOR SCENE ───────────────────────────────────────────────────────────
+
+export default function HouseInterior({ onExit, onBasement }: { onExit: () => void; onBasement: () => void }) {
   const [entries, setEntries] = useState<Entry[]>([])
   const [selected, setSelected] = useState<Entry | null>(null)
-  const [loading, setLoading] = useState(true)
+  const mouse = useMouseNorm()
 
   useEffect(() => {
-    client.fetch<Entry[]>(allEntriesQuery)
-      .then(data => { setEntries(data); setLoading(false) })
-      .catch(() => setLoading(false))
+    client.fetch<Entry[]>(allEntriesQuery).then(setEntries).catch(() => {})
   }, [])
 
   const books = entries.filter(e => e.entryType === 'book' || e.entryType === 'thought')
@@ -71,340 +397,81 @@ export default function HouseInterior({ onExit }: { onExit: () => void }) {
   const artworks = entries.filter(e => e.entryType === 'artwork' || e.entryType === 'photo')
 
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
-      <svg
-        viewBox="0 0 1200 800"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ width: '100%', height: '100%', display: 'block' }}
-        preserveAspectRatio="xMidYMid slice"
+    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
+      <Canvas
+        camera={{ position: [0, 3, 7], fov: 65, near: 0.1, far: 100 }}
+        gl={{ antialias: true }}
+        style={{ background: '#2A8888' }}
       >
-        <defs>
-          <style>{`
-            .obj { cursor: pointer; }
-            .obj:hover { filter: brightness(1.06); }
-            .hint {
-              font-family: Georgia, serif;
-              font-size: 11px;
-              letter-spacing: 2px;
-              pointer-events: none;
-              user-select: none;
-            }
-            @keyframes warmGlow {
-              0%, 100% { opacity: 0.85; }
-              50% { opacity: 1; }
-            }
-            .window-light { animation: warmGlow 5s ease-in-out infinite; }
-          `}</style>
-        </defs>
+        <ambientLight intensity={0.4} />
+        <pointLight position={[0, 7, 0]} intensity={0.8} color='#FFF8E8' />
+        <pointLight position={[-5, 5, 3]} intensity={0.5} color='#FFE8C0' />
 
-        {/* ── CEILING ── */}
-        <rect x="0" y="0" width="1200" height="118" fill={IC.ceiling} />
+        <LookCamera mouse={mouse} />
 
-        {/* ── BACK WALL ── warm Avery cream */}
-        <rect x="0" y="118" width="1200" height="522" fill={IC.wall} />
+        <Room />
+        <Window />
+        <Bookshelf books={books} />
+        <Sofa />
+        <TV movies={movies} onSelect={setSelected} />
 
-        {/* ── SIDE WALLS (give depth) ── */}
-        <polygon points="0,0 130,55 130,748 0,800" fill={IC.wallSide} />
-        <polygon points="1200,0 1070,55 1070,748 1200,800" fill={IC.wallSide} />
+        {/* Artwork frames on back wall */}
+        <ArtworkFrame x={-3.5} y={5} z={-7.85} art={artworks[0]} />
+        <ArtworkFrame x={-0.5} y={5} z={-7.85} art={artworks[1]} />
 
-        {/* ── FLOOR ── warm Avery sand */}
-        <polygon points="0,640 1200,640 1200,800 0,800" fill={IC.floor} />
-        {/* Floor planks */}
-        {[650, 663, 676, 689, 702, 716, 730, 745, 760, 776].map((y, i) => (
-          <line key={i} x1="0" y1={y} x2="1200" y2={y}
-            stroke={IC.floorPlank} strokeWidth="1" opacity="0.18" />
-        ))}
-        {/* Floor shading — darkens near edges */}
-        <polygon points="0,640 130,640 130,800 0,800" fill={IC.floorPlank} opacity="0.15" />
-        <polygon points="1070,640 1200,640 1200,800 1070,800" fill={IC.floorPlank} opacity="0.15" />
+        <Plant />
+        <BasementStairs onClick={onBasement} />
+        <ExitDoor onClick={onExit} />
+      </Canvas>
 
-        {/* ── RUG (Avery terracotta) ── */}
-        <ellipse cx="600" cy="688" rx="340" ry="52" fill={IC.rug} />
-        <ellipse cx="600" cy="688" rx="308" ry="44" fill="none" stroke={IC.rugDark} strokeWidth="3" opacity="0.35" />
-        <ellipse cx="600" cy="688" rx="270" ry="36" fill="none" stroke={IC.rugDark} strokeWidth="1.5" opacity="0.25" />
+      {/* UI overlay labels */}
+      <div style={{
+        position: 'absolute', bottom: 24, left: '50%',
+        transform: 'translateX(-50%)',
+        color: 'rgba(255,255,255,0.35)',
+        fontFamily: 'Georgia, serif', fontSize: '11px', letterSpacing: '4px',
+        pointerEvents: 'none',
+      }}>
+        move to look around &nbsp;·&nbsp; click the door to go outside &nbsp;·&nbsp; stairs → basement
+      </div>
 
-        {/* ── WINDOW (center-back wall, warm Avery light) ── */}
-        <rect x="716" y="142" width="238" height="310" fill={IC.windowFrame} />
-        <rect x="728" y="154" width="214" height="286" fill={IC.windowGlow} className="window-light" />
-        {/* Window view: simple Avery landscape */}
-        <rect x="728" y="154" width="214" height="145" fill={IC.windowView} opacity="0.7" />
-        <rect x="728" y="278" width="214" height="162" fill={IC.windowViewGround} opacity="0.45" />
-        {/* Window cross bars */}
-        <rect x="828" y="154" width="8" height="286" fill={IC.windowFrame} opacity="0.55" />
-        <rect x="728" y="295" width="214" height="8" fill={IC.windowFrame} opacity="0.55" />
-        {/* Window sill */}
-        <rect x="714" y="452" width="242" height="20" fill={IC.windowFrame} />
-        {/* Window sill object — small vase */}
-        <rect x="812" y="438" width="16" height="16" fill={IC.plantPot} rx="2" />
-        <ellipse cx="820" cy="435" rx="10" ry="7" fill={IC.plant} />
-
-        {/* ── BOOKSHELF (left wall area) ── */}
-        {/* Shelf unit back */}
-        <rect x="72" y="148" width="282" height="438" fill={IC.shelf} />
-        <rect x="82" y="158" width="262" height="418" fill={IC.wall} />
-        {/* Shelf boards */}
-        {[278, 368, 458, 528].map(y => (
-          <rect key={y} x="82" y={y} width="262" height="13" fill={IC.shelf} />
-        ))}
-        {/* Shelf top */}
-        <rect x="72" y="148" width="282" height="14" fill={IC.shelfDark} />
-        {/* Books on shelves */}
-        {books.length === 0 && (
-          <text x="213" y="325" textAnchor="middle" fill={IC.shelfDark}
-            style={{ fontFamily: 'Georgia, serif', fontSize: '11px', opacity: 0.4 }}>
-            add a book
-          </text>
-        )}
-        {books.slice(0, 12).map((book, i) => {
-          const row = Math.floor(i / 4)
-          const col = i % 4
-          const bx = 88 + col * 64
-          const by = [168, 290, 380][row] ?? 168
-          const bColor = IC.bookColors[i % IC.bookColors.length]
-          return (
-            <g key={book._id} className="obj" onClick={() => setSelected(book)}>
-              <rect x={bx} y={by} width={56} height={100} fill={bColor} rx="1" />
-              <rect x={bx + 2} y={by} width={3} height={100} fill="rgba(0,0,0,0.12)" />
-              <rect x={bx + 8} y={by + 10} width={36} height={3} fill="rgba(255,255,255,0.2)" />
-            </g>
-          )
-        })}
-        {/* Shelf shadow */}
-        <rect x="72" y="148" width="8" height="438" fill={IC.shelfDark} opacity="0.3" />
-
-        {/* ── SOFA (Avery style — flat color, simplified geometry) ── */}
-        {/* Sofa back */}
-        <rect x="198" y="486" width="428" height="95" fill={IC.sofa} rx="5" />
-        <rect x="198" y="482" width="428" height="12" fill={IC.sofaLight} rx="4" />
-        {/* Sofa seat */}
-        <rect x="204" y="562" width="416" height="52" fill={IC.sofaDark} rx="3" />
-        {/* Seat cushion line */}
-        <line x1="406" y1="562" x2="406" y2="614" stroke={IC.sofaLight} strokeWidth="2" opacity="0.25" />
-        {/* Left arm */}
-        <rect x="192" y="504" width="28" height="120" fill={IC.sofaArm} rx="3" />
-        <rect x="190" y="500" width="32" height="12" fill={IC.sofaDark} rx="2" />
-        {/* Right arm */}
-        <rect x="604" y="504" width="28" height="120" fill={IC.sofaArm} rx="3" />
-        <rect x="602" y="500" width="32" height="12" fill={IC.sofaDark} rx="2" />
-        {/* Sofa legs */}
-        <rect x="210" y="614" width="12" height="20" fill={IC.shelfDark} />
-        <rect x="402" y="614" width="12" height="20" fill={IC.shelfDark} />
-        <rect x="602" y="614" width="12" height="20" fill={IC.shelfDark} />
-
-        {/* ── TV / SCREEN (right side) ── */}
-        {/* TV cabinet */}
-        <rect x="875" y="588" width="232" height="58" fill={IC.cabinet} rx="3" />
-        <polygon points="875,588 899,568 1107,568 1107,588" fill={IC.cabinetDark} opacity="0.4" />
-        {/* TV outer frame */}
-        <rect x="866" y="442" width="252" height="152" fill={IC.tv} rx="10" />
-        {/* Screen */}
-        <rect x="879" y="454" width="226" height="128" fill={IC.tvScreen} rx="5" />
-        {movies.length > 0 ? (
-          <g className="obj" onClick={() => setSelected(movies[0])}>
-            <rect x="879" y="454" width="226" height="128" fill={IC.tvOn} rx="5" />
-            <text x="992" y="508" textAnchor="middle" fill="white" opacity="0.75"
-              style={{ fontFamily: 'Georgia, serif', fontSize: '13px' }}>
-              {movies[0].title.slice(0, 22)}
-            </text>
-            {movies.length > 1 && (
-              <text x="992" y="530" textAnchor="middle" fill="white" opacity="0.4"
-                style={{ fontFamily: 'Georgia, serif', fontSize: '10px' }}>
-                +{movies.length - 1} more
-              </text>
-            )}
-          </g>
-        ) : (
-          <text x="992" y="522" textAnchor="middle" fill={IC.tvScreen}
-            style={{ fontFamily: 'Georgia, serif', fontSize: '11px', opacity: 0.5, filter: 'brightness(1.6)' }}>
-            add a movie
-          </text>
-        )}
-        {/* TV stand leg */}
-        <rect x="978" y="594" width="24" height="16" fill={IC.tv} />
-
-        {/* ── ARTWORK ON WALL ── */}
-        {/* Frame positions */}
-        {[
-          { x: 378, y: 148, w: 136, h: 170 },
-          { x: 536, y: 148, w: 158, h: 170 },
-        ].map((pos, i) => {
-          const art = artworks[i]
-          return (
-            <g key={i} className={art ? 'obj' : ''} onClick={art ? () => setSelected(art) : undefined}>
-              {/* Frame */}
-              <rect x={pos.x} y={pos.y} width={pos.w} height={pos.h} fill={IC.frame} rx="2" />
-              {/* Canvas */}
-              <rect x={pos.x + 9} y={pos.y + 9} width={pos.w - 18} height={pos.h - 18} fill={IC.canvas} />
-              {art ? (
-                art.image ? (
-                  <image
-                    href={urlFor(art.image).width(300).url()}
-                    x={pos.x + 9} y={pos.y + 9}
-                    width={pos.w - 18} height={pos.h - 18}
-                    preserveAspectRatio="xMidYMid slice"
-                  />
-                ) : (
-                  <text x={pos.x + pos.w / 2} y={pos.y + pos.h / 2 + 4}
-                    textAnchor="middle" fill={IC.shelfDark}
-                    style={{ fontFamily: 'Georgia, serif', fontSize: '11px', opacity: 0.7 }}>
-                    {art.title.slice(0, 14)}
-                  </text>
-                )
-              ) : (
-                <text x={pos.x + pos.w / 2} y={pos.y + pos.h / 2 + 4}
-                  textAnchor="middle" fill={IC.shelfDark}
-                  style={{ fontFamily: 'Georgia, serif', fontSize: '10px', opacity: 0.3 }}>
-                  artwork
-                </text>
-              )}
-            </g>
-          )
-        })}
-
-        {/* ── PLANT (left corner) ── */}
-        <rect x="148" y="605" width="42" height="50" fill={IC.plantPot} rx="3" />
-        <polygon points="148,610 190,610 186,604 152,604" fill={IC.plantDark} opacity="0.25" />
-        <ellipse cx="169" cy="578" rx="24" ry="38" fill={IC.plant} transform="rotate(-14, 169, 578)" />
-        <ellipse cx="169" cy="578" rx="24" ry="38" fill={IC.plant} transform="rotate(14, 169, 578)" />
-        <ellipse cx="169" cy="566" rx="16" ry="28" fill={IC.plantDark} transform="rotate(-4, 169, 566)" />
-
-        {/* ── SIDE TABLE ── */}
-        <rect x="638" y="604" width="88" height="12" fill={IC.table} rx="2" />
-        <polygon points="638,604 726,604 724,600 640,600" fill={IC.tableDark} opacity="0.4" />
-        <rect x="648" y="616" width="10" height="32" fill={IC.tableDark} />
-        <rect x="706" y="616" width="10" height="32" fill={IC.tableDark} />
-        {/* Mug on table */}
-        <rect x="672" y="590" width="24" height="16" fill={IC.mug} rx="2" />
-        <path d="M 696 593 Q 706 593 706 601 Q 706 609 696 609" fill="none" stroke={IC.mug} strokeWidth="3" strokeLinecap="round" />
-
-        {/* ── EXIT DOOR (right side wall) ── */}
-        <g className="obj" onClick={onExit} style={{ cursor: 'pointer' }}>
-          <rect x="1048" y="368" width="112" height="292" fill={IC.doorFrame} />
-          <rect x="1058" y="378" width="92" height="274" fill={IC.door} />
-          <circle cx="1066" cy="515" r="6" fill={IC.shelf} />
-          <path d="M 1058 378 Q 1104 355 1150 378" fill={IC.wallSide} opacity="0.3" />
-          <text x="1104" y="668" textAnchor="middle" fill={IC.floorPlank}
-            style={{ fontFamily: 'Georgia, serif', fontSize: '11px', opacity: 0.5, letterSpacing: '2px' }}>
-            outside
-          </text>
-        </g>
-
-        {/* ── ROOM LABEL ── */}
-        <text x="600" y="96" textAnchor="middle" fill={IC.shelfDark}
-          style={{ fontFamily: 'Georgia, serif', fontSize: '14px', opacity: 0.35, letterSpacing: '6px' }}>
-          MY WORLD
-        </text>
-
-        {/* Loading indicator */}
-        {loading && (
-          <text x="600" y="400" textAnchor="middle" fill={IC.shelfDark}
-            style={{ fontFamily: 'Georgia, serif', fontSize: '13px', opacity: 0.4, letterSpacing: '3px' }}>
-            ...
-          </text>
-        )}
-      </svg>
-
-      {/* ── ENTRY DETAIL PANEL ── */}
+      {/* Entry detail panel */}
       {selected && (
         <div
           style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(60, 40, 20, 0.42)',
-            backdropFilter: 'blur(3px)',
+            position: 'absolute', inset: 0, display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(30,20,10,0.55)',
+            backdropFilter: 'blur(4px)',
           }}
           onClick={() => setSelected(null)}
         >
           <div
             style={{
-              backgroundColor: '#F0E8D8',
-              maxWidth: '520px',
-              width: '88%',
-              padding: '2.8rem 3rem',
-              borderRadius: '2px',
+              backgroundColor: '#F0E8D8', maxWidth: 500, width: '88%',
+              padding: '2.8rem 3rem', borderRadius: '1px',
               fontFamily: 'Georgia, serif',
-              boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
             }}
             onClick={e => e.stopPropagation()}
           >
-            <p style={{
-              color: '#A07850',
-              fontSize: '10px',
-              letterSpacing: '4px',
-              marginBottom: '10px',
-              textTransform: 'uppercase',
-            }}>
+            <p style={{ color: '#A07850', fontSize: '10px', letterSpacing: '4px', marginBottom: 10, textTransform: 'uppercase' }}>
               {selected.entryType}
             </p>
-            <h2 style={{
-              color: '#3A2818',
-              fontSize: '26px',
-              marginBottom: '14px',
-              lineHeight: 1.25,
-              fontWeight: 'normal',
-            }}>
+            <h2 style={{ color: '#3A2818', fontSize: '26px', marginBottom: 14, lineHeight: 1.25, fontWeight: 'normal' }}>
               {selected.title}
             </h2>
             {selected.image && (
-              <img
-                src={urlFor(selected.image).width(460).url()}
-                alt={selected.title}
-                style={{
-                  width: '100%',
-                  height: '220px',
-                  objectFit: 'cover',
-                  marginBottom: '16px',
-                  borderRadius: '1px',
-                }}
-              />
+              <img src={urlFor(selected.image).width(460).url()} alt={selected.title}
+                style={{ width: '100%', height: 200, objectFit: 'cover', marginBottom: 16 }} />
             )}
             {selected.description && (
-              <p style={{
-                color: '#5A4030',
-                fontSize: '15px',
-                lineHeight: 1.75,
-                whiteSpace: 'pre-wrap',
-              }}>
+              <p style={{ color: '#5A4030', fontSize: '15px', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
                 {selected.description}
               </p>
             )}
-            {selected.date && (
-              <p style={{ color: '#A08060', fontSize: '12px', marginTop: '18px', letterSpacing: '1px' }}>
-                {selected.date}
-              </p>
-            )}
-            {selected.tags && selected.tags.length > 0 && (
-              <div style={{ marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {selected.tags.map(tag => (
-                  <span key={tag} style={{
-                    color: '#A07850',
-                    fontSize: '10px',
-                    letterSpacing: '2px',
-                    border: '1px solid #C0A878',
-                    padding: '2px 10px',
-                  }}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-            <button
-              onClick={() => setSelected(null)}
-              style={{
-                marginTop: '24px',
-                background: 'none',
-                border: 'none',
-                color: '#A07850',
-                fontSize: '11px',
-                letterSpacing: '3px',
-                cursor: 'pointer',
-                padding: '0',
-                textTransform: 'uppercase',
-              }}
-            >
+            {selected.date && <p style={{ color: '#A08060', fontSize: '12px', marginTop: 18 }}>{selected.date}</p>}
+            <button onClick={() => setSelected(null)}
+              style={{ marginTop: 22, background: 'none', border: 'none', color: '#A07850', fontSize: '11px', letterSpacing: '3px', cursor: 'pointer', textTransform: 'uppercase' }}>
               close
             </button>
           </div>
