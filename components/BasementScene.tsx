@@ -2,7 +2,6 @@
 
 import { useRef, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Float } from '@react-three/drei'
 import * as THREE from 'three'
 
 function useMouseNorm() {
@@ -126,15 +125,18 @@ function BasementRoom() {
 
 // Orange canoe — Doig 100 Years Ago
 function OrangeCanoe() {
+  const canoeRef = useRef<THREE.Group>(null)
   const figure = useRef<THREE.Group>(null)
   useFrame(({ clock }) => {
     if (figure.current) {
       figure.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.4) * 0.06
     }
+    if (canoeRef.current) {
+      canoeRef.current.position.y = 0.2 + Math.sin(clock.getElapsedTime() * 0.9) * 0.08
+    }
   })
   return (
-    <Float speed={0.8} floatIntensity={0.3} floatingRange={[-0.1, 0.1]}>
-      <group position={[2.5, 0.2, -3]} rotation={[0, -0.3, 0]}>
+    <group ref={canoeRef} position={[2.5, 0.2, -3]} rotation={[0, -0.3, 0]}>
         {/* Long orange hull */}
         <mesh>
           <boxGeometry args={[8, 0.6, 1.8]} />
@@ -176,7 +178,6 @@ function OrangeCanoe() {
           </mesh>
         </group>
       </group>
-    </Float>
   )
 }
 

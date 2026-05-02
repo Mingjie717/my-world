@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Float, Stars } from '@react-three/drei'
+// Float and Stars from drei removed — replaced with pure R3F to avoid webpack chunk errors
 import * as THREE from 'three'
 
 // ─── PALETTE (from painting references) ──────────────────────────────────────
@@ -457,13 +457,49 @@ function ForestIsland({ onClick }: { onClick: () => void }) {
   )
 }
 
+// ─── STAR FIELD (replaces drei Stars) ────────────────────────────────────────
+
+function StarField() {
+  const ref = useRef<THREE.Points>(null)
+  const count = 900
+  const positions = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2
+    const phi = Math.acos(2 * Math.random() - 1)
+    const r = 80 + Math.random() * 30
+    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
+    positions[i * 3 + 1] = Math.abs(r * Math.cos(phi)) + 5
+    positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta)
+  }
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial color="#E8F0FF" size={0.35} sizeAttenuation />
+    </points>
+  )
+}
+
+// ─── FLOAT BOB (replaces drei Float) ─────────────────────────────────────────
+
+function FloatBob({ children, baseY = 0 }: { children: React.ReactNode; baseY?: number }) {
+  const ref = useRef<THREE.Group>(null)
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.position.y = baseY + Math.sin(clock.getElapsedTime() * 1.2) * 0.22
+    }
+  })
+  return <group ref={ref}>{children}</group>
+}
+
 // ─── BOAT (Doig Spearfishing — green + orange figure) ────────────────────────
 
 function Boat({ onClick }: { onClick: () => void }) {
   const pointer = useCursorPointer()
   return (
-    <Float speed={1.4} floatIntensity={0.5} floatingRange={[-0.25, 0.25]}>
-      <group position={[-11, -2.2, 4]} rotation={[0, 0.35, 0]} onClick={onClick} {...pointer}>
+    <FloatBob baseY={-2.2}>
+      <group position={[-11, 0, 4]} rotation={[0, 0.35, 0]} onClick={onClick} {...pointer}>
         {/* Hull — long green canoe shape */}
         <mesh position={[0, 0, 0]}>
           <boxGeometry args={[5.5, 0.9, 2.2]} />
@@ -499,7 +535,7 @@ function Boat({ onClick }: { onClick: () => void }) {
           <meshBasicMaterial color='#C8C0A0' />
         </mesh>
       </group>
-    </Float>
+    </FloatBob>
   )
 }
 
@@ -562,7 +598,7 @@ export default function World({ onEnterHouse, onDive, onRowToForest, onBasement 
         <Horizon isNight={isNight} />
         <CelestialBody isNight={isNight} />
         <Clouds isNight={isNight} />
-        {isNight && <Stars radius={90} depth={55} count={1000} factor={4} fade />}
+        {isNight && <StarField />}
 
         <Ocean isNight={isNight} onDive={onDive} />
         {isNight && <MoonReflection />}
