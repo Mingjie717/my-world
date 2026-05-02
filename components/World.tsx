@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect, useMemo } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Float, Stars } from '@react-three/drei'
 import * as THREE from 'three'
@@ -149,10 +149,8 @@ function CelestialBody({ isNight }: { isNight: boolean }) {
 
 // ─── CLOUDS ───────────────────────────────────────────────────────────────────
 
-function DayCloud({ x, y, z, s = 1 }: { x: number; y: number; z: number; s?: number }) {
+function DayCloud({ x, y, z, s = 1, speed = 0.05, offset = 0 }: { x: number; y: number; z: number; s?: number; speed?: number; offset?: number }) {
   const ref = useRef<THREE.Group>(null)
-  const speed = useMemo(() => 0.04 + Math.random() * 0.02, [])
-  const offset = useMemo(() => Math.random() * Math.PI * 2, [])
   useFrame(({ clock }) => {
     if (ref.current) ref.current.position.x = x + Math.sin(clock.getElapsedTime() * speed + offset) * 2.5
   })
@@ -186,59 +184,56 @@ function Clouds({ isNight }: { isNight: boolean }) {
   )
   return (
     <group>
-      <DayCloud x={-20} y={15} z={-32} s={1.3} />
-      <DayCloud x={10} y={17} z={-42} s={0.75} />
-      <DayCloud x={-6} y={19} z={-50} s={0.6} />
+      <DayCloud x={-20} y={15} z={-32} s={1.3} speed={0.042} offset={0} />
+      <DayCloud x={10} y={17} z={-42} s={0.75} speed={0.058} offset={2.1} />
+      <DayCloud x={-6} y={19} z={-50} s={0.6} speed={0.035} offset={4.4} />
     </group>
   )
 }
 
-// ─── OCEAN (Avery swirling wave shader) ──────────────────────────────────────
+// ─── OCEAN (Avery swirling waves — animated strips, no custom shader) ────────
 
-const VS = `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-const FS = `
-  varying vec2 vUv;
-  uniform float uTime;
-  uniform vec3 uOcean;
-  uniform vec3 uWave;
-  void main() {
-    float x = vUv.x; float y = vUv.y;
-    float s = sin(x * 30.0 + sin(y * 7.0 + uTime * 0.35) * 2.0 + uTime * 0.42)
-            + sin(x * 20.0 - y * 16.0 + uTime * 0.28) * 0.55;
-    float wave = smoothstep(0.52, 0.74, s * 0.5 + 0.5);
-    gl_FragColor = vec4(mix(uOcean, uWave, wave * 0.44), 1.0);
-  }
-`
+function WaveStrip({ z, phase, isNight }: { z: number; phase: number; isNight: boolean }) {
+  const ref = useRef<THREE.Mesh>(null)
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.position.x = Math.sin(clock.getElapsedTime() * 0.18 + phase) * 28
+      ref.current.position.z = z + Math.cos(clock.getElapsedTime() * 0.12 + phase) * 5
+    }
+  })
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, Math.PI * 0.08 * (phase % 3 - 1)]} position={[0, -2.75, z]}>
+      <planeGeometry args={[55, 0.9]} />
+      <meshBasicMaterial
+        color={isNight ? '#1A1030' : P.waveDay}
+        transparent
+        opacity={isNight ? 0.25 : 0.38}
+      />
+    </mesh>
+  )
+}
 
 function Ocean({ isNight, onDive }: { isNight: boolean; onDive: () => void }) {
-  const uniforms = useRef({
-    uTime: { value: 0 },
-    uOcean: { value: new THREE.Color(P.oceanDay) },
-    uWave: { value: new THREE.Color(P.waveDay) },
-  })
+  const matRef = useRef<THREE.MeshLambertMaterial>(null)
   const pointer = useCursorPointer()
+  const wavePhases = [0, 1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8]
 
-  useFrame(({ clock }) => {
-    uniforms.current.uTime.value = clock.getElapsedTime()
-    uniforms.current.uOcean.value.set(isNight ? P.oceanNight : P.oceanDay)
-    uniforms.current.uWave.value.set(isNight ? P.oceanNightPurple : P.waveDay)
+  useFrame(() => {
+    if (matRef.current) {
+      matRef.current.color.set(isNight ? P.oceanNight : P.oceanDay)
+    }
   })
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.8, 0]} onClick={onDive} {...pointer}>
-      <planeGeometry args={[220, 220]} />
-      <shaderMaterial
-        vertexShader={VS}
-        fragmentShader={FS}
-        uniforms={uniforms.current}
-      />
-    </mesh>
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.82, 0]} onClick={onDive} {...pointer}>
+        <planeGeometry args={[220, 220]} />
+        <meshLambertMaterial ref={matRef} color={isNight ? P.oceanNight : P.oceanDay} />
+      </mesh>
+      {wavePhases.map((phase, i) => (
+        <WaveStrip key={i} z={-20 + i * 8} phase={phase} isNight={isNight} />
+      ))}
+    </group>
   )
 }
 

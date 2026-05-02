@@ -30,27 +30,32 @@ function LookCamera({ mouse }: { mouse: React.MutableRefObject<{ x: number; y: n
   return null
 }
 
-// Water surface shader — pale blue-grey (Doig 100 Years Ago)
-const VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`
-const FS = `
-  varying vec2 vUv; uniform float uTime;
-  void main() {
-    float r = sin(vUv.x * 18.0 + uTime * 0.3) * 0.5 + 0.5;
-    float g = sin(vUv.y * 12.0 - uTime * 0.2) * 0.5 + 0.5;
-    float w = smoothstep(0.55, 0.75, (r + g) * 0.5) * 0.25;
-    vec3 base = vec3(0.6, 0.7, 0.76);
-    vec3 light = vec3(0.82, 0.88, 0.92);
-    gl_FragColor = vec4(mix(base, light, w), 1.0);
-  }
-`
-
+// Water surface — pale blue-grey (Doig 100 Years Ago), animated ripple strips
 function BasementWater() {
-  const u = useRef({ uTime: { value: 0 } })
-  useFrame(({ clock }) => { u.current.uTime.value = clock.getElapsedTime() })
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-      <planeGeometry args={[40, 60]} />
-      <shaderMaterial vertexShader={VS} fragmentShader={FS} uniforms={u.current} />
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+        <planeGeometry args={[40, 60]} />
+        <meshLambertMaterial color='#98B0C0' />
+      </mesh>
+      {[0, 1, 2, 3, 4].map(i => (
+        <BasementRipple key={i} z={-8 + i * 4} phase={i * 1.3} />
+      ))}
+    </group>
+  )
+}
+
+function BasementRipple({ z, phase }: { z: number; phase: number }) {
+  const ref = useRef<THREE.Mesh>(null)
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.position.x = Math.sin(clock.getElapsedTime() * 0.15 + phase) * 6
+    }
+  })
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, z]}>
+      <planeGeometry args={[30, 0.5]} />
+      <meshBasicMaterial color='#C0D0DC' transparent opacity={0.3} />
     </mesh>
   )
 }
